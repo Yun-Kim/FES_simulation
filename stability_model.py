@@ -14,7 +14,7 @@ def tibialis_length(theta):
     :param theta: body angle (up from prone horizontal)  # TODO: CHANGE THETA TO DOWN FROM PRONE HORIZONTAL
     :return: tibialis anterior length
     """
-    rotation = [[np.cos(theta + np.pi / 2), -np.sin(theta + np.pi / 2)], [np.sin(theta + np.pi / 2), np.cos(theta + np.pi / 2)]]
+    rotation = [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     origin = np.dot(rotation, [.3, -.03])
     insertion = [.06, -.03]
     difference = origin - insertion
@@ -37,7 +37,7 @@ def dynamics(x, t, tibialis):
     :param x: state vector [ankle angle, angular velocity, horizontal coordinate of ankle joint,
                             horizontal velocity of ankle, horizontal acceleration of ankle,
                             vertical position of ankle, velocity of ankle in y direction,
-                            acceleration of ankle in y direction, normalized length of TA muscle]
+                            vertical acceleration of ankle, normalized length of TA muscle]
     :param t: time
     :param tibialis: tibialis anterior muscle (HillTypeModel)
     :return: derivative of state vector
@@ -47,31 +47,30 @@ def dynamics(x, t, tibialis):
     # TODO: Define Ms such that Ms / (sigma * sqrt(2 * pi)) = maximum vertical displacement during swing phase
     # TODO: Define activation of TA
 
-    i_ankle = 90  # kgm^2
+    i_foot = 0.12  # kgm^2
     dta = .03  # m
     # modeling the average male
     body_mass = 90  # kg
     foot_length = 0.254  # metres (10 inches)
-    foot_mass = 0.0137 * body_mass  # mass of foot (kg)  --> female is 1.29
+    foot_mass = 0.0137 * body_mass  # mass of foot (kg)  --> female is 1.29%
     d_COM = 0.4415 * foot_length  # distance from ankle to centre of mass of foot (m)
     ls = 0.5 # TODO: find stride length
     sigma = 0.05
-    max_vertiical_disp = 0.1 #TODO: max vertical displacement disp
+    max_vertical_disp = 0.1 #TODO: max vertical displacement disp
     ms = 0.1 * sigma * np.sqrt(2 * np.pi)
-    a_ta = 1
+    a_ta = 0.2
     mean_swing_time = 0.2
-    torque_ta = a_ta * 0.01 * tibialis.f0M * force_length_tendon(tibialis.norm_tendon_length(tibialis_length(x[0]), x[3])) * dta
-
+    torque_ta = tibialis.f0M * force_length_tendon(tibialis.norm_tendon_length(tibialis_length(np.pi / 2 - x[0]), x[8])) * dta
     x_dot[0] = x[1]
-    x_dot[1] = ((torque_ta - gravity_moment(x[0], foot_mass, foot_length))
-                + foot_mass * d_COM * (x[4] * np.sin(x[0] - x[7] * np.cos(x[0])) / i_ankle))
+    x_dot[1] = (torque_ta - gravity_moment(x[0], foot_mass, foot_length)
+                + foot_mass * d_COM * (x[4] * np.sin(x[0]) - x[7] * np.cos(x[0]))) / i_foot
     x_dot[2] = x[3]
     x_dot[3] = x[4]
     x_dot[4] = (- ls / ((sigma ** 3) * np.sqrt(2 * np.pi))) * np.exp(- ((t - mean_swing_time) ** 2) / (2 * (sigma ** 2))) + (ls / ((sigma ** 5) * np.sqrt(2 * np.pi))) * (t - mean_swing_time) ** 2 * np.exp(- ((t - mean_swing_time) ** 2) / (2 * (sigma ** 2)))
     x_dot[5] = x[6]
     x_dot[6] = x[7]
     x_dot[7] = (ms / ((sigma ** 5) * np.sqrt(2 * np.pi))) * np.exp(- ((t - mean_swing_time) ** 2) / (2 * (sigma ** 2))) * (3 * (t - mean_swing_time) - (t - mean_swing_time) ** 3 / sigma ** 2)
-    x_dot[8] = get_velocity(a_ta, x[8], tibialis.norm_tendon_length(tibialis_length(x[0]), x[8]))
+    x_dot[8] = get_velocity(a_ta, x[8], tibialis.norm_tendon_length(tibialis_length(np.pi / 2 - x[0]), x[8]))
 
     y = x[5] - foot_length * np.sin(x[0])
 
@@ -96,9 +95,9 @@ def simulate(control, T):
         return dynamics(x, t, tibialis)
 
     theta = -1.39  # Rad
-    normalized_TA_length = tibialis_length(theta) / rest_length_tibialis  # TODO: Need to calculate initial condition for normalized_TA_length
+    normalized_TA_length = tibialis_length(np.pi / 2 - theta) / rest_length_tibialis  # TODO: Need to calculate initial condition for normalized_TA_length
 
-    sol = solve_ivp(f, T, [theta, 0, 0, 0, 0, 0, 0, 0, 1], rtol=1e-5, atol=1e-8)
+    sol = solve_ivp(f, T, [theta, 0, 0, 0, 0, 0, 0, 0, normalized_TA_length], rtol=1e-5, atol=1e-8)
     time = sol.t
 
     tibialis_moment = np.zeros(time.shape)
@@ -106,8 +105,8 @@ def simulate(control, T):
     a_ta = 1
 
     for i in range(len(tibialis_moment)):
-        tibialis_moment[i] = a_ta * 0.01 * tibialis.f0M * force_length_tendon(tibialis.norm_tendon_length(tibialis_length(sol.y[0][i]), sol.y[3][i])) * 0.03
-        force[i] = force_length_tendon(tibialis.norm_tendon_length(tibialis_length(sol.y[0][i]), sol.y[3][i]))
+        tibialis_moment[i] = tibialis.f0M * force_length_tendon(tibialis.norm_tendon_length(tibialis_length(np.pi / 2 - sol.y[0][i]), sol.y[8][i])) * 0.03
+        force[i] = tibialis.f0M * force_length_tendon(tibialis.norm_tendon_length(tibialis_length(np.pi / 2 - sol.y[0][i]), sol.y[8][i]))
     body_mass = 90  # kg
     foot_length = 0.254  # metres (10 inches)
     foot_mass = 0.0137 * body_mass  # mass of foot (kg)  --> female is 1.29

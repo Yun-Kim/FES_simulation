@@ -5,6 +5,7 @@ from scipy.optimize import fsolve
 from sklearn.linear_model import Ridge
 from scipy.special import expit
 from scipy.integrate import solve_ivp
+import scipy
 
 
 class HillTypeMuscle:
@@ -180,6 +181,86 @@ class Regression():
         return phi
 
 
+def get_shank_angle_foot_drop():
+    data = np.genfromtxt('foot_drop_angular_shank.csv', delimiter=',')  # Data from WebPlotDigitizer extracted into data.csv
+    time = data[:, 0]
+    angle = data[:, 1]
+
+    # plt.figure()
+    # plt.title('Drop Foot Angular Shank')
+    # plt.plot(time, angle, 'g')
+    # plt.xlabel("Time (s)")
+    # plt.ylabel("Ankle Angle (deg)")
+    # plt.show()
+
+    centres = np.arange(min(time) + 0.305, max(time), .1)
+    width = .15
+    result = Regression(time, angle, centres, width, .1, sigmoids=False)
+    return result, time, angle
+
+
+def get_shank_angle_normal_foot():
+    data = np.genfromtxt('normal_foot_angular_shank.csv', delimiter=',')  # Data from WebPlotDigitizer extracted into data.csv
+    angle = data[:, 1]
+    time = data[:, 0]
+
+    # plt.figure()
+    # plt.title('Normal Foot Angular Shank')
+    # plt.plot(time, angle, 'g')
+    # plt.xlabel("Time (s)")
+    # plt.ylabel("Ankle Angle (deg)")
+    # plt.show()
+
+    centres = np.arange(min(time) + 0.305, max(time), .1)
+    width = .15
+    result = Regression(time, angle, centres, width, .1, sigmoids=False)
+
+    return result, time, angle
+
+
+def get_shank_angle():
+
+    data = np.genfromtxt('Shank.csv', delimiter=',')  # Data from WebPlotDigitizer extracted into data.csv
+    angle = data[:, 1]
+    time = data[:, 0]
+
+    # plt.figure()
+    # plt.title('Normal Foot Angular Shank')
+    # plt.plot(time, angle, 'g')
+    # plt.xlabel("Time (s)")
+    # plt.ylabel("Ankle Angle (deg)")
+    # plt.show()
+
+    centres = np.arange(min(time), max(time), .01)
+    width = .15
+    result = Regression(time, angle, centres, width, .1, sigmoids=False)
+
+    return result, time, angle
+
+
+def get_shank_angle_comp():
+
+    data = np.genfromtxt('Foot_Angle_Comp.csv', delimiter=',')  # Data from WebPlotDigitizer extracted into data.csv
+    time = data[:, 0]
+    angle = data[:, 1]
+
+    # plt.figure()
+    # plt.title('Drop Foot Angular Shank')
+    # plt.plot(time, angle, 'g')
+    # plt.xlabel("Time (s)")
+    # plt.ylabel("Ankle Angle (deg)")
+    # plt.show()
+
+    centres = np.arange(min(time), max(time), .01)
+    width = .15
+    result = Regression(time, angle, centres, width, .1, sigmoids=False)
+    return result, time, angle
+
+
+def regression_error(predicted, label):
+    return np.sqrt(np.mean((predicted-label)**2))
+
+
 def get_muscle_force_velocity_regression():
     data = np.array([
         [-1.0028395556708567, 0.0024834319945283845],
@@ -298,19 +379,37 @@ def isometric_contraction(f0_max, resting_length_m, resting_length_t, dt=0.01):
     plt.show()
 
 
-
-
 if __name__ == '__main__':
-    # Question 1
-    plot_curves()
-    # Question 2
-    print(get_velocity(1, np.array([1]), np.array([1.01])))
-    # Question 3
-    # To find suitable time step:
-    # dt = 0.5
-    # for i in range(7):
-    #     isometric_contraction(100, 0.3, 0.1, dt=dt/(2**i))
-    isometric_contraction(100, 0.3, 0.1, dt=0.015625)
+    model_drop_foot, time_drop_foot, angle_drop_foot = get_shank_angle_foot_drop()
+    model_norm_foot, time_norm_foot, angle_norm_foot = get_shank_angle_normal_foot()
+    time2 = np.arange(0, 10, 0.001)
+    time = np.arange(0, 6, 0.01)
+
+    plt.figure()
+    plt.title('Foot Drop Angular Shank')
+    plt.plot(time, model_drop_foot.eval(time), 'b')
+    plt.scatter(time, scipy.misc.derivative(model_drop_foot.eval, time, 0.01))
+    plt.xlabel("Time (s)")
+    plt.ylabel("Ankle Angle (deg)")
+    plt.show()
+
+    print('Drop Foot: ', regression_error(model_drop_foot.eval(time_drop_foot), angle_drop_foot))
+    _, _, r_value, p_value, _ = scipy.stats.linregress(model_drop_foot.eval(time_drop_foot), angle_drop_foot)
+    print('Drop Foot R squared Value: ', r_value ** 2)
+
+    plt.figure()
+    plt.title('Normal Foot Angular Shank')
+    plt.plot(time2, model_norm_foot.eval(time2), 'g')
+    plt.plot(time2, scipy.misc.derivative(model_norm_foot.eval, time2, 0.001))
+    plt.xlabel("Time (s)")
+    plt.ylabel("Ankle Angle (deg)")
+    plt.show()
+
+    print('Normal Foot: ', regression_error(model_norm_foot.eval(time_norm_foot), angle_norm_foot))
+
+    _, _, r_value, p_value, _ = scipy.stats.linregress(model_norm_foot.eval(time_norm_foot), angle_norm_foot)
+    print('Normal Foot R squared Value: ', r_value ** 2)
+
 
 
 
